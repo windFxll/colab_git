@@ -112,7 +112,9 @@ def main():
     num_workers = int(config.get("num_workers", 0))
     lr = float(config["lr"])
 
-    output_dir = project_root / "experiments" / config["output_dir"]
+    output_root = Path(config["output_root"])
+    output_dir = output_root / config["output_dir"]
+    
     output_dir.mkdir(parents=True, exist_ok=True)
 
     logger, log_file = setup_logger(output_dir)

@@ -22,6 +22,7 @@ pattern_types:
   - mental_head
   - mental_circle
 
+output_root: /content/drive/MyDrive/Colab Notebooks/experiments
 output_dir: exp_unet_edge_v2_bce_dice_0.3mse
 device: auto
 num_workers: 0
