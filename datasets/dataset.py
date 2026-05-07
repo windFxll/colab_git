@@ -18,25 +18,26 @@ class LithoDataset(Dataset):
             self._ensure_png_dir(resist_dir, "resist_bottom", pattern)
 
             input_paths = sorted(glob.glob(os.path.join(layout_dir, "*.png")))
+            print(f"[DEBUG] {pattern}: input={len(input_paths)}")
             if not input_paths:
                 raise RuntimeError(
                     f"No layout samples found for pattern '{pattern}' in '{layout_dir}'."
                 )
             for p in input_paths:
-                filename = os.path.basename(p)
-            self._extract_sequence_id(filename)  # 仅做编号合法性检查
+              filename = os.path.basename(p)
+              self._extract_sequence_id(filename)  # 仅做编号合法性检查
 
-            tgt = os.path.join(resist_dir, filename)
+              tgt = os.path.join(resist_dir, filename)
 
-            if not os.path.exists(tgt):
-                raise FileNotFoundError(
-                    f"Missing paired resist image for pattern '{pattern}', "
-                    f"file '{filename}': '{tgt}'"
-                )
+              if not os.path.exists(tgt):
+                  raise FileNotFoundError(
+                      f"Missing paired resist image for pattern '{pattern}', "
+                      f"file '{filename}': '{tgt}'"
+                  )
 
-            self._ensure_readable_image(p, "layout")
-            self._ensure_readable_image(tgt, "resist_bottom")
-            self.pairs.append((p, tgt))
+              self._ensure_readable_image(p, "layout")
+              self._ensure_readable_image(tgt, "resist_bottom")
+              self.pairs.append((p, tgt))
 
         if len(self.pairs) == 0:
             raise RuntimeError(
