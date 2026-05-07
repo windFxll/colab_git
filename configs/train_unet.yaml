@@ -1,0 +1,26 @@
+model: unet_edge_v2
+loss:
+  weights:
+    bce: 1
+    dice: 1
+    mse: 0.3
+
+
+lr: 0.0001
+batch_size: 2
+epochs: 30
+weight_decay: 0.00001
+log_every: 1
+
+pattern_types:
+  - mental_layer
+  - mental_line
+  - mental_corner
+  - mental_curve
+  - mental_head
+  - mental_circle
+
+output_dir: exp_unet_edge_v2_bce_dice_0.3mse
+device: auto
+num_workers: 0
+seed: 42
