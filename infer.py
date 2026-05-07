@@ -62,7 +62,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     project_root = Path(__file__).resolve().parent
 
-    exp_name = "exp_unet_edge_v2_bce_dice_0.3mse"
+    exp_name = "exp_unet_edge_v2_bce_dice_0.5mse"
 
     checkpoint_dir = project_root / "experiments" / exp_name / "checkpoints"
     input_dir = project_root / "test_pattern" / "png"

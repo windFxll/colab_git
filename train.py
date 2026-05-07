@@ -20,7 +20,7 @@ def setup_logger(output_dir):
     log_dir = output_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    log_file = log_dir / f"train_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    log_file = log_dir / f"train.log"
 
     logger = logging.getLogger("train_logger")
     logger.setLevel(logging.INFO)
@@ -48,7 +48,7 @@ def setup_logger(output_dir):
     return logger, log_file
 
 def save_config(config, log_dir):
-    config_path = log_dir / f"config_{datetime.now().strftime('%Y%m%d_%H%M%S')}.yaml"
+    config_path = log_dir / f"config.yaml"
     with open(config_path, "w", encoding="utf-8") as f:
         yaml.dump(config, f, sort_keys=False)
     return config_path
