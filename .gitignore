@@ -17,15 +17,16 @@ experiments/
 logs/
 runs/
 outputs/
+weight_picture/
 
 # Model weights
 *.pt
 *.pth
 *.ckpt
 
-# Images
-*.png
-*.jpg
+# # Images
+# *.png
+# *.jpg
 
 # System
 .DS_Store
