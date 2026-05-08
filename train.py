@@ -171,11 +171,13 @@ def main():
             total_loss = 0.0
             logger.info(f"\n[Epoch {epoch + 1}/{epochs}] Start")
 
-            for batch_idx, (x, y) in enumerate(loader, start=1):
-                x, y = x.to(device), y.to(device)
+            for batch_idx, (x, y, weight) in enumerate(loader, start=1):
+                x = x.to(device)
+                y = y.to(device)
+                weight = weight.to(device)
 
                 pred = model(x)
-                loss, loss_dict = criterion(pred, y)
+                loss, loss_dict = criterion(pred, y, weight)
 
                 optimizer.zero_grad()
                 loss.backward()

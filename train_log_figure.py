@@ -10,7 +10,8 @@ def extract_avg_loss(log_path):
     avg_losses = []
 
     # 正则：匹配 Avg Loss = 后面的数字（支持科学计数法）
-    pattern = re.compile(r"Avg Loss\s*=\s*([0-9.eE+-]+)")
+    # pattern = re.compile(r"Avg Loss\s*=\s*([0-9.eE+-]+)")
+    pattern = re.compile(r"Total\s*=\s*([0-9.eE+-]+)")
 
     with open(log_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -44,7 +45,7 @@ if __name__ == "__main__":
     from pathlib import Path
 
     # ======== 指定 logs 目录（不用写具体文件名）========
-    logs_dir = Path("experiments/exp_unet_edge_v2_bce_dice_0.5sobel/logs")
+    logs_dir = Path("experiments/exp_unet_edge_v2_bce_dice_0.5mse/logs")
 
     # ======== 找所有 train_*.log ========
     log_files = sorted(logs_dir.glob("train_*.log"))
