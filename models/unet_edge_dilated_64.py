@@ -39,7 +39,7 @@ class Down(nn.Module):
 # =========================
 # 主模型
 # =========================
-@register_model("unet_edge_64_v2")
+@register_model("unet_edge_dilated_64")
 class UNetEdge_64_v2(nn.Module):
     def __init__(self, base_c=64):
         super().__init__()

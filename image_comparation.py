@@ -1,205 +1,213 @@
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from PIL import Image
 from pathlib import Path
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+import re
 
-# ===== 项目根目录 =====
+
 project_root = Path(__file__).resolve().parent
 
+gt_dir = project_root / "test_pattern" / "simulation_results" / "figure"
 
-def load_image(path):
-    img = Image.open(path).convert('L')
-    img = np.array(img).astype(np.float32)
+DRIVE_ROOT = Path("/content/drive/MyDrive/Colab Notebooks")
 
-    if img.max() > 1.0:
-        img = img / 255.0
-
-    return img
+exp_name = "exp_unet_edge_v2_bce_dice_0.5mse"
+exp_dir = DRIVE_ROOT / "experiments" / exp_name
 
 
-def compute_metrics(gt, pred):
-    diff = pred - gt
+def load_binary(path, thresh=127):
+    img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        raise FileNotFoundError(path)
 
-    l2 = np.sqrt(np.sum(diff ** 2))
-    mse = np.mean(diff ** 2)
-    rmse = np.sqrt(mse)
+    return (img < thresh).astype(np.uint8)
 
-    return l2, mse, rmse
 
-def compute_soft_connectivity(gt, pred, threshold=0.5, d_max=5):
-    """
-    软连接指标：
-    衡量预测在“潜在连接区域”中的响应强度
-    """
-    gt_bin = (gt > threshold).astype(np.uint8)
+def pixel_difference(pred, target):
+    diff = np.abs(pred.astype(np.int32) - target.astype(np.int32))
+    return diff.mean()
 
-    from scipy.ndimage import distance_transform_edt
-    dist_map = distance_transform_edt(1 - gt_bin)
 
-    # 只关注“接近结构但不是结构本身”的区域
-    bridge_region = (dist_map < d_max) & (dist_map > 0)
+def row_min_bridge(binary):
+    h, w = binary.shape
+    bridges = np.full(h, np.nan)
 
-    if np.sum(bridge_region) == 0:
+    for y in range(h):
+        row = binary[y]
+
+        black_runs = []
+        in_black = False
+        start = 0
+
+        for x in range(w):
+            if row[x] == 1 and not in_black:
+                start = x
+                in_black = True
+            elif row[x] == 0 and in_black:
+                black_runs.append((start, x - 1))
+                in_black = False
+
+        if in_black:
+            black_runs.append((start, w - 1))
+
+        if len(black_runs) < 2:
+            continue
+
+        local_bridges = []
+
+        for i in range(len(black_runs) - 1):
+            right_end = black_runs[i][1]
+            next_left = black_runs[i + 1][0]
+
+            bridge = next_left - right_end - 1
+
+            if bridge > 0:
+                local_bridges.append(bridge)
+
+        if len(local_bridges) > 0:
+            bridges[y] = np.mean(local_bridges)
+
+    return bridges
+
+
+def mean_gap(binary):
+    bridges = row_min_bridge(binary)
+    valid = bridges[~np.isnan(bridges)]
+
+    if len(valid) == 0:
         return 0.0
 
-    return float(np.mean((pred > 0.3)[bridge_region]))
-
-def compute_soft_connectivity_v2(gt, pred, threshold=0.5):
-    """
-    改进版：
-    同时奖励“填充结构”和“桥接区域”
-    """
-
-    gt_bin = (gt > threshold).astype(np.uint8)
-
-    from scipy.ndimage import distance_transform_edt
-
-    # 距离到结构
-    dist_to_gt = distance_transform_edt(1 - gt_bin)
-
-    # 权重：越靠近结构越重要
-    weight = np.exp(-dist_to_gt / 3.0)
-
-    # 加权响应
-    score = np.sum(pred * weight) / np.sum(weight)
-
-    return float(score)
+    return valid.mean()
 
 
-def evaluate_one_epoch(gt_dir, pred_dir, num_images=10):
-    l2_list, mse_list, rmse_list = [], [], []
-    soft_conn_list = []
+def gap_profile_error(pred, target):
+    gp = row_min_bridge(pred)
+    gt = row_min_bridge(target)
 
-    for i in range(num_images):
-        pred_name = f"test_pattern_{i:05d}.png"
-        gt_name = f"resist_bottom_{i:05d}.png"
+    valid = (~np.isnan(gp)) & (~np.isnan(gt))
 
-        pred_path = pred_dir / pred_name
-        gt_path = gt_dir / gt_name
+    if valid.sum() == 0:
+        return 0.0
 
-        if not gt_path.exists():
-            print(f"[GT Missing] {gt_path}")
-            continue
+    return np.mean(np.abs(gp[valid] - gt[valid]))
 
-        if not pred_path.exists():
-            print(f"[PRED Missing] {pred_path}")
-            continue
 
-        gt = load_image(gt_path)
-        pred = load_image(pred_path)
+def evaluate_pair(pred_path, gt_path):
+    pred = load_binary(pred_path)
+    gt = load_binary(gt_path)
 
-        if gt.shape != pred.shape:
-            raise ValueError(f"Shape mismatch: {pred_name}")
+    px_diff = pixel_difference(pred, gt)
 
-        l2, mse, rmse = compute_metrics(gt, pred)
-        soft_conn = compute_soft_connectivity_v2(gt, pred)
+    pred_gap = mean_gap(pred)
+    gt_gap = mean_gap(gt)
+    gap_err = abs(pred_gap - gt_gap)
 
-        l2_list.append(l2)
-        mse_list.append(mse)
-        rmse_list.append(rmse)
-        soft_conn_list.append(soft_conn)
-
-    if len(mse_list) == 0:
-        return None
+    profile_err = gap_profile_error(pred, gt)
 
     return {
-        "l2": np.mean(l2_list),
-        "mse": np.mean(mse_list),
-        "rmse": np.mean(rmse_list),
-        "soft_conn": np.mean(soft_conn_list),
+        "pixel_diff": px_diff,
+        "gap_err": gap_err,
+        "profile_err": profile_err,
     }
 
+def extract_epoch(folder_name):
+    m = re.search(r"epoch_(\d+)", folder_name)
+    if m:
+        return int(m.group(1))
+    return -1
 
-def evaluate_all_epochs(exp_dir, gt_dir, max_epoch=100):
-    results = []
 
-    for epoch in range(1, max_epoch + 1):
-        folder_name = f"infer_checkpoint_epoch_{epoch:03d}"
-        pred_dir = exp_dir / folder_name   # ✅ 正确用 exp_dir
+def main():
+    infer_dirs = sorted(
+        [p for p in exp_dir.iterdir() if p.is_dir() and "infer_checkpoint" in p.name],
+        key=lambda x: extract_epoch(x.name),
+    )
 
-        if not pred_dir.exists():
+    epochs = []
+    pixel_curve = []
+    gap_curve = []
+    profile_curve = []
+
+    for infer_dir in infer_dirs:
+        pixel_list = []
+        gap_list = []
+        profile_list = []
+
+        for i in range(10):
+            gt_path = gt_dir / f"resist_bottom_{i:05d}.png"
+            pred_path = infer_dir / f"test_pattern_{i:05d}.png"
+
+            if not gt_path.exists():
+                print(f"[WARN] missing gt: {gt_path}")
+                continue
+
+            if not pred_path.exists():
+                print(f"[WARN] missing pred: {pred_path}")
+                continue
+
+            result = evaluate_pair(pred_path, gt_path)
+
+            pixel_list.append(result["pixel_diff"])
+            gap_list.append(result["gap_err"])
+            profile_list.append(result["profile_err"])
+
+        if len(pixel_list) == 0:
             continue
 
-        print(f"Processing epoch {epoch}...")
+        epoch = extract_epoch(infer_dir.name)
 
-        metrics = evaluate_one_epoch(gt_dir, pred_dir)
+        epochs.append(epoch)
+        pixel_curve.append(np.mean(pixel_list))
+        gap_curve.append(np.mean(gap_list))
+        profile_curve.append(np.mean(profile_list))
 
-        if metrics is None:
-            continue
+        print(
+            f"[Epoch {epoch}] "
+            f"pixel={pixel_curve[-1]:.4f}, "
+            f"gap={gap_curve[-1]:.4f}, "
+            f"profile={profile_curve[-1]:.4f}"
+        )
 
-        results.append({
-            "epoch": epoch,
-            "l2": metrics["l2"],
-            "mse": metrics["mse"],
-            "rmse": metrics["rmse"],
-            "soft_conn": metrics["soft_conn"],
-        })
+    # ==================================================
+    # 绘图
+    # ==================================================
+    fig, ax1 = plt.subplots(figsize=(9, 5))
 
-    return pd.DataFrame(results)
+    # 左轴：gap 和 profile
+    ax1.plot(epochs, gap_curve, marker="o", label="Mean Gap Error")
+    ax1.plot(epochs, profile_curve, marker="o", label="Gap Profile Error")
 
+    ax1.set_xlabel("Epoch")
+    ax1.set_ylabel("Gap / Profile Error")
+    ax1.grid(True)
 
-def plot_results(df, save_path):
-    plt.figure()
+    # 右轴：pixel
+    ax2 = ax1.twinx()
+    ax2.plot(
+        epochs,
+        pixel_curve,
+        marker="o",
+        linestyle="--",
+        color="red",
+        label="Pixel Difference",
+    )
+    ax2.set_ylabel("Pixel Difference", color="red")
+    ax2.tick_params(axis="y", labelcolor="red")
 
-    # 横坐标：1,2,3,...
-    x = range(1, len(df) + 1)
+    # 合并图例
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
 
-    plt.plot(x, df["mse"], label="MSE")
-    plt.plot(x, df["rmse"], label="RMSE")
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
 
-    plt.xlabel("Epoch Index")
-    plt.ylabel("Error")
-    plt.title("Error vs Epoch")
+    plt.title("Prediction Quality vs Training Epoch")
 
-    # 强制x轴为整数刻度
-    plt.xticks(x)
-
-    plt.legend()
-    plt.grid()
-
-    plt.savefig(save_path)
+    save_path = exp_dir / "evaluation_trend.png"
+    plt.savefig(save_path, dpi=200)
     plt.close()
-    
-def plot_soft_connectivity(df, save_path):
-    plt.figure()
 
-    x = range(1, len(df) + 1)
-
-    plt.plot(x, df["soft_conn"], label="Soft Connectivity")
-
-    plt.xlabel("Epoch Index")
-    plt.ylabel("Soft Connectivity Score")
-    plt.title("Soft Connectivity vs Epoch")
-
-    plt.xticks(x)
-    plt.legend()
-    plt.grid()
-
-    plt.savefig(save_path)
-    plt.close()
+    print(f"Saved figure to: {save_path}")
 
 
 if __name__ == "__main__":
-    # ===== 配置 =====
-    exp_name = "exp_unet_edge_v2_bce_dice_0.5mse"
-    exp_dir = project_root / "experiments" / exp_name
-    gt_dir = project_root / "test_pattern" / "simulation_results" / "figure"
-    max_epoch = 100
-
-    # ===== 运行 =====
-    df = evaluate_all_epochs(exp_dir, gt_dir, max_epoch)
-
-    # ===== 保存 CSV =====
-    csv_path = exp_dir / "evaluation_metrics.csv"
-    df.to_csv(csv_path, index=False)
-    print(f"Saved CSV to {csv_path}")
-
-    # ===== 绘图 =====
-    plot_path = exp_dir / "error_curve.png"
-    plot_results(df, plot_path)
-    print(f"Saved mse plot to {plot_path}")
-    
-    soft_plot_path = exp_dir / "soft_connectivity_curve.png"
-    plot_soft_connectivity(df, soft_plot_path)
-    print(f"Saved soft connectivity plot to {soft_plot_path}")
+    main()

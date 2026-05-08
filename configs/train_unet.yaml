@@ -1,12 +1,14 @@
-model: unet_test
+model: unet_edge_dilated_64
 loss:
   weights:
     bce: 1
+    dice: 1
+    mse: 0.5
 
 save_every: 5
 lr: 0.0001
 batch_size: 1
-epochs: 30
+epochs: 100
 weight_decay: 0.00001
 log_every: 1
 
@@ -21,7 +23,7 @@ pattern_types:
   - mental_circle
 
 output_root: /content/drive/MyDrive/Colab Notebooks/experiments
-output_dir: exp_unet_test_bce_dice_0.5mse_3bias
+output_dir: exp_unet_edge_dilated_64_bce_dice_0.5mse_3bias
 device: auto
 num_workers: 0
 seed: 42

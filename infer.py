@@ -61,10 +61,11 @@ def postprocess(pred):
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     project_root = Path(__file__).resolve().parent
+    DRIVE_ROOT = Path("/content/drive/MyDrive/Colab Notebooks")
 
-    exp_name = "exp_unet_edge_v2_bce_dice_0.5mse"
+    exp_name = "exp_unet_test_bce_0.5dice"
 
-    checkpoint_dir = project_root / "experiments" / exp_name / "checkpoints"
+    checkpoint_dir = DRIVE_ROOT / "experiments" / exp_name / "checkpoints"
     input_dir = project_root / "test_pattern" / "png"
 
     # ========= 模式配置 =========
@@ -75,8 +76,10 @@ def main():
     # ===========================================
 
     # ========= config =========
-    log_dir = project_root / "experiments" / exp_name / "logs"
-    config_files = sorted(log_dir.glob("config_*.yaml"))
+    # log_dir = project_root / "experiments" / exp_name / "logs"
+    
+    log_dir = DRIVE_ROOT / "experiments" / exp_name / "logs"
+    config_files = sorted(log_dir.glob("config.yaml"))
 
     if not config_files:
         raise FileNotFoundError(f"No config found in {log_dir}")
@@ -111,7 +114,7 @@ def main():
 
         model = load_model(model_path, cfg["model"], device)
 
-        output_dir = project_root / "experiments" / exp_name / f"infer_{model_path.stem}"
+        output_dir = DRIVE_ROOT / "experiments" / exp_name / f"infer_{model_path.stem}"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         for i, path in enumerate(img_paths):
