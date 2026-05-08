@@ -194,9 +194,12 @@ def main():
             epoch_loss = total_loss / len(loader)
             logger.info(f"[Epoch {epoch + 1}/{epochs}] Avg Loss = {epoch_loss:.6f}")
 
-            epoch_ckpt_path = checkpoint_dir / f"checkpoint_epoch_{epoch + 1:03d}.pt"
-            save_checkpoint(epoch_ckpt_path, epoch, epoch_loss)
-            logger.info(f"[Save] Epoch checkpoint -> {epoch_ckpt_path}")
+            save_every = int(config.get("save_every", 5))
+
+            if (epoch + 1) % save_every == 0:
+                epoch_ckpt_path = checkpoint_dir / f"checkpoint_epoch_{epoch + 1:03d}.pt"
+                save_checkpoint(epoch_ckpt_path, epoch, epoch_loss)
+                logger.info(f"[Save] Epoch checkpoint -> {epoch_ckpt_path}")
 
             if epoch_loss < best_loss:
                 best_loss = epoch_loss

@@ -259,43 +259,43 @@ class LithoDataset(Dataset):
         )
 
         # debug overlay
-        if self.debug_saved < 20:
-            print(f"DEBUG SAVE at idx = {idx}")
+        # if self.debug_saved < 20:
+        #     print(f"DEBUG SAVE at idx = {idx}")
 
-            vis = cv2.cvtColor(inp, cv2.COLOR_GRAY2BGR)
+        #     vis = cv2.cvtColor(inp, cv2.COLOR_GRAY2BGR)
 
-            roi_mask = weight > 1.0
+        #     roi_mask = weight > 1.0
 
-            overlay = vis.copy()
-            overlay[roi_mask] = (220, 220, 220)
+        #     overlay = vis.copy()
+        #     overlay[roi_mask] = (220, 220, 220)
 
-            alpha = 0.45
+        #     alpha = 0.45
 
-            vis = cv2.addWeighted(
-                overlay,
-                alpha,
-                vis,
-                1 - alpha,
-                0,
-            )
+        #     vis = cv2.addWeighted(
+        #         overlay,
+        #         alpha,
+        #         vis,
+        #         1 - alpha,
+        #         0,
+        #     )
 
-            tips = extract_tip_candidates(binary)
+        #     tips = extract_tip_candidates(binary)
 
-            for x, y in tips:
-                cv2.circle(
-                    vis,
-                    (x, y),
-                    3,
-                    (0, 0, 255),
-                    -1,
-                )
+        #     for x, y in tips:
+        #         cv2.circle(
+        #             vis,
+        #             (x, y),
+        #             3,
+        #             (0, 0, 255),
+        #             -1,
+        #         )
 
-            cv2.imwrite(
-                f"debug_overlay_{self.debug_saved}_idx{idx}.png",
-                vis,
-            )
+        #     cv2.imwrite(
+        #         f"debug_overlay_{self.debug_saved}_idx{idx}.png",
+        #         vis,
+        #     )
 
-            self.debug_saved += 1
+        #     self.debug_saved += 1
 
         inp = inp.astype(np.float32) / 255.0
         tgt = tgt.astype(np.float32) / 255.0
