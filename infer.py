@@ -63,10 +63,10 @@ def main():
     project_root = Path(__file__).resolve().parent
     DRIVE_ROOT = Path("/content/drive/MyDrive/Colab Notebooks")
 
-    exp_name = "exp_unet_test_bce_0.5dice"
+    exp_name = "exp_unet_edge_dilated_64_bce_dice_0.5mse_3bias"
 
     checkpoint_dir = DRIVE_ROOT / "experiments" / exp_name / "checkpoints"
-    input_dir = project_root / "test_pattern" / "png"
+    input_dir = project_root / "test_pattern" / "simulation_results" /  "figure"
 
     # ========= 模式配置 =========
     MODE = "batch"   # "single" 或 "batch"
@@ -125,7 +125,11 @@ def main():
 
             result = postprocess(pred)
 
-            save_path = output_dir / path.name
+            save_name = f"test_pattern_{i:05d}.png"
+            save_path = output_dir / save_name
+            cv2.imwrite(str(save_path), result)
+
+            print(f"[{i+1}/{len(img_paths)}] {save_name}")
             cv2.imwrite(str(save_path), result)
 
             print(f"[{i+1}/{len(img_paths)}] {path.name}")

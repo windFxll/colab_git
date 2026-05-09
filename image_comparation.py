@@ -11,7 +11,7 @@ gt_dir = project_root / "test_pattern" / "simulation_results" / "figure"
 
 DRIVE_ROOT = Path("/content/drive/MyDrive/Colab Notebooks")
 
-exp_name = "exp_unet_edge_v2_bce_dice_0.5mse"
+exp_name = "exp_unet_edge_dilated_64_bce_dice_0.5mse"
 exp_dir = DRIVE_ROOT / "experiments" / exp_name
 
 
@@ -23,9 +23,9 @@ def load_binary(path, thresh=127):
     return (img < thresh).astype(np.uint8)
 
 
-def pixel_difference(pred, target):
-    diff = np.abs(pred.astype(np.int32) - target.astype(np.int32))
-    return diff.mean()
+def mse_difference(pred, target):
+    diff = pred.astype(np.float32) - target.astype(np.float32)
+    return np.mean(diff ** 2)
 
 
 def row_min_bridge(binary):
@@ -96,7 +96,7 @@ def evaluate_pair(pred_path, gt_path):
     pred = load_binary(pred_path)
     gt = load_binary(gt_path)
 
-    px_diff = pixel_difference(pred, gt)
+    mse_diff = mse_difference(pred, gt)
 
     pred_gap = mean_gap(pred)
     gt_gap = mean_gap(gt)
@@ -105,10 +105,11 @@ def evaluate_pair(pred_path, gt_path):
     profile_err = gap_profile_error(pred, gt)
 
     return {
-        "pixel_diff": px_diff,
+        "mse_diff": mse_diff,
         "gap_err": gap_err,
         "profile_err": profile_err,
     }
+
 
 def extract_epoch(folder_name):
     m = re.search(r"epoch_(\d+)", folder_name)
@@ -124,18 +125,19 @@ def main():
     )
 
     epochs = []
-    pixel_curve = []
+    mse_curve = []
     gap_curve = []
     profile_curve = []
 
     for infer_dir in infer_dirs:
-        pixel_list = []
+        mse_list = []
         gap_list = []
         profile_list = []
 
         for i in range(10):
             gt_path = gt_dir / f"resist_bottom_{i:05d}.png"
             pred_path = infer_dir / f"test_pattern_{i:05d}.png"
+            # pred_path = infer_dir / f"resist_bottom_{i:05d}.png"
 
             if not gt_path.exists():
                 print(f"[WARN] missing gt: {gt_path}")
@@ -147,23 +149,23 @@ def main():
 
             result = evaluate_pair(pred_path, gt_path)
 
-            pixel_list.append(result["pixel_diff"])
+            mse_list.append(result["mse_diff"])
             gap_list.append(result["gap_err"])
             profile_list.append(result["profile_err"])
 
-        if len(pixel_list) == 0:
+        if len(mse_list) == 0:
             continue
 
         epoch = extract_epoch(infer_dir.name)
 
         epochs.append(epoch)
-        pixel_curve.append(np.mean(pixel_list))
+        mse_curve.append(np.mean(mse_list))
         gap_curve.append(np.mean(gap_list))
         profile_curve.append(np.mean(profile_list))
 
         print(
             f"[Epoch {epoch}] "
-            f"pixel={pixel_curve[-1]:.4f}, "
+            f"mse={mse_curve[-1]:.4f}, "
             f"gap={gap_curve[-1]:.4f}, "
             f"profile={profile_curve[-1]:.4f}"
         )
@@ -181,18 +183,20 @@ def main():
     ax1.set_ylabel("Gap / Profile Error")
     ax1.grid(True)
 
-    # 右轴：pixel
+    # 右轴：MSE
     ax2 = ax1.twinx()
+
     ax2.plot(
         epochs,
-        pixel_curve,
-        marker="o",
+        mse_curve,
+        marker="s",
         linestyle="--",
-        color="red",
-        label="Pixel Difference",
+        color="green",
+        label="MSE",
     )
-    ax2.set_ylabel("Pixel Difference", color="red")
-    ax2.tick_params(axis="y", labelcolor="red")
+
+    ax2.set_ylabel("MSE")
+    ax2.tick_params(axis="y", labelcolor="green")
 
     # 合并图例
     lines1, labels1 = ax1.get_legend_handles_labels()
