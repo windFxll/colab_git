@@ -59,14 +59,15 @@ def postprocess(pred):
 
 
 def main():
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     project_root = Path(__file__).resolve().parent
     DRIVE_ROOT = Path("/content/drive/MyDrive/Colab Notebooks")
 
-    exp_name = "exp_unet_edge_dilated_64_bce_dice_0.5mse_3bias"
-
+    exp_name = "exp_unet_edge_v2_bce_dice_0.5mse_50batch"
+    print(exp_name)
     checkpoint_dir = DRIVE_ROOT / "experiments" / exp_name / "checkpoints"
-    input_dir = project_root / "test_pattern" / "simulation_results" /  "figure"
+    input_dir = project_root / "test_pattern" / "png"
 
     # ========= 模式配置 =========
     MODE = "batch"   # "single" 或 "batch"
@@ -132,7 +133,6 @@ def main():
             print(f"[{i+1}/{len(img_paths)}] {save_name}")
             cv2.imwrite(str(save_path), result)
 
-            print(f"[{i+1}/{len(img_paths)}] {path.name}")
 
     print("\nInference done!")
 

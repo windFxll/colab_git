@@ -26,7 +26,13 @@ outputs/
 # Images
 *.png
 *.jpg
+*_evaluation.csv
 
 # System
 .DS_Store
 Thumbs.db
+
+image_comparation.py
+train_log_figure.py
+run_pipeline.py
+rename.py
