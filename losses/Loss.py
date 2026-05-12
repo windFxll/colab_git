@@ -10,6 +10,7 @@ def mse_loss(pred, target, weight=None):
 
     if weight is not None:
         loss_map = loss_map * weight
+        return loss_map.sum() / weight.sum()
 
     return loss_map.mean()
 
@@ -23,6 +24,7 @@ def bce_loss(pred, target, weight=None):
 
     if weight is not None:
         loss_map = loss_map * weight
+        return loss_map.sum() / weight.sum()
 
     return loss_map.mean()
 

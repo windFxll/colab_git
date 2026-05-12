@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-
+print("USING MODIFIED DATASET.PY")
 def extract_tip_candidates(binary_img, border_margin=2):
     """
     binary_img: uint8, foreground=255
@@ -90,8 +90,8 @@ def pair_tip_candidates(tips, y_thresh=20):
 def build_tip_weight_map(
     binary_img,
     roi_height=80,
-    pad_x=15,
-    tip_weight=3.0,
+    pad_x=25,
+    tip_weight=10.0,
 ):
     """
     根据 layout 生成 tip 权重图
@@ -127,10 +127,23 @@ def build_tip_weight_map(
 
 
 class LithoDataset(Dataset):
-    def __init__(self, root_dir, pattern_types):
+    def __init__(
+        self,
+        root_dir,
+        pattern_types,
+        tip_weight=3.0,
+        roi_height=80,
+        pad_x=25,
+    ):
         self.root_dir = os.path.abspath(root_dir)
         self.pattern_types = pattern_types
+        self.tip_weight = tip_weight
+        self.roi_height = roi_height
+        self.pad_x = pad_x
         self.pairs = []
+        self.tip_weight = tip_weight
+        self.roi_height = roi_height
+        self.pad_x = pad_x
 
         for pattern in self.pattern_types:
             layout_dir = self._layout_dir(pattern)
@@ -253,10 +266,12 @@ class LithoDataset(Dataset):
 
         weight = build_tip_weight_map(
             binary,
-            roi_height=80,
-            pad_x=25,
-            tip_weight=3.0,
+            roi_height=self.roi_height,
+            pad_x=self.pad_x,
+            tip_weight=self.tip_weight,
         )
+        if idx == 0:
+            print("weight unique =", np.unique(weight))
 
         # debug overlay
         # if self.debug_saved < 20:

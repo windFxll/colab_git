@@ -95,6 +95,7 @@ def build_model(model_name):
 
 
 def main():
+    print()
     args = parse_args()
     config = load_config(args.config)
     criterion = CombinedLoss(config["loss"])
@@ -114,6 +115,7 @@ def main():
 
     output_root = Path(config["output_root"])
     output_dir = output_root / config["output_dir"]
+    print(f"Output directory: {output_dir}")
     
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -129,7 +131,13 @@ def main():
     checkpoint_dir = output_dir / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    dataset = LithoDataset(str(data_root), pattern_types)
+    dataset = LithoDataset(
+        str(data_root),
+        pattern_types,
+        tip_weight=config.get("tip_weight", 3.0),
+        roi_height=config.get("tip_roi_height", 80),
+        pad_x=config.get("tip_pad_x", 25),
+    )
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -172,6 +180,14 @@ def main():
             logger.info(f"\n[Epoch {epoch + 1}/{epochs}] Start")
 
             for batch_idx, (x, y, weight) in enumerate(loader, start=1):
+                if epoch == 0 and batch_idx == 1:
+                    print("\n===== WEIGHT DEBUG =====")
+                    print("weight shape:", weight.shape)
+                    print("weight min :", weight.min().item())
+                    print("weight max :", weight.max().item())
+                    print("weight mean:", weight.mean().item())
+                    print("weight unique:", torch.unique(weight))
+                    print("========================\n")
                 x = x.to(device)
                 y = y.to(device)
                 weight = weight.to(device)
