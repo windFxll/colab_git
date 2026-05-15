@@ -31,3 +31,6 @@ weight_picture/
 # System
 .DS_Store
 Thumbs.db
+
+rename.py
+run_pipeline.py
