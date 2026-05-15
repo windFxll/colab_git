@@ -270,8 +270,6 @@ class LithoDataset(Dataset):
             pad_x=self.pad_x,
             tip_weight=self.tip_weight,
         )
-        if idx == 0:
-            print("weight unique =", np.unique(weight))
 
         # debug overlay
         # if self.debug_saved < 20:

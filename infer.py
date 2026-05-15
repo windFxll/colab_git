@@ -64,7 +64,7 @@ def main():
     project_root = Path(__file__).resolve().parent
     DRIVE_ROOT = Path("/content/drive/MyDrive/Colab Notebooks")
 
-    exp_name = "exp_unet_edge_v2_bce_dice_0.5mse_50batch"
+    exp_name = "exp_unet_edge_v2_bce_dice_0.5mse_5batch"
     print(exp_name)
     checkpoint_dir = DRIVE_ROOT / "experiments" / exp_name / "checkpoints"
     input_dir = project_root / "test_pattern" / "png"
