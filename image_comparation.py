@@ -1,9 +1,30 @@
 from pathlib import Path
+import argparse
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import re
+import pandas as pd
 
+# ==================================================
+# Args
+# ==================================================
+
+def parse_args():
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--exp_name",
+        type=str,
+        required=True,
+        help="Experiment name"
+    )
+
+    return parser.parse_args()
+
+
+args = parse_args()
 
 project_root = Path(__file__).resolve().parent
 
@@ -11,8 +32,12 @@ gt_dir = project_root / "test_pattern" / "simulation_results" / "figure"
 
 DRIVE_ROOT = Path("/content/drive/MyDrive/Colab Notebooks")
 
-exp_name = "exp_unet_test_bottleneck_bce_dice_0.5mse"
-exp_dir = DRIVE_ROOT / "experiments" / exp_name
+exp_name = args.exp_name
+exp_dir = (
+    DRIVE_ROOT
+    / "experiments"
+    / exp_name
+)
 
 
 def load_binary(path, thresh=127):
@@ -23,48 +48,68 @@ def load_binary(path, thresh=127):
     return (img < thresh).astype(np.uint8)
 
 
-def pixel_difference(pred, target):
-    diff = np.abs(pred.astype(np.int32) - target.astype(np.int32))
-    return diff.mean()
+def mse_difference(pred, target):
+    diff = pred.astype(np.float32) - target.astype(np.float32)
+    return np.mean(diff ** 2)
 
 
-def row_max_gap(binary):
+def row_min_bridge(binary):
     h, w = binary.shape
-    gaps = np.zeros(h)
+    bridges = np.full(h, np.nan)
 
     for y in range(h):
         row = binary[y]
 
-        max_len = 0
-        cur = 0
+        black_runs = []
+        in_black = False
+        start = 0
 
-        for v in row:
-            if v == 1:
-                cur += 1
-                max_len = max(max_len, cur)
-            else:
-                cur = 0
+        for x in range(w):
+            if row[x] == 1 and not in_black:
+                start = x
+                in_black = True
+            elif row[x] == 0 and in_black:
+                black_runs.append((start, x - 1))
+                in_black = False
 
-        gaps[y] = max_len
+        if in_black:
+            black_runs.append((start, w - 1))
 
-    return gaps
+        if len(black_runs) < 2:
+            continue
+
+        local_bridges = []
+
+        for i in range(len(black_runs) - 1):
+            right_end = black_runs[i][1]
+            next_left = black_runs[i + 1][0]
+
+            bridge = next_left - right_end - 1
+
+            if bridge > 0:
+                local_bridges.append(bridge)
+
+        if len(local_bridges) > 0:
+            bridges[y] = np.mean(local_bridges)
+
+    return bridges
 
 
-def min_gap(binary):
-    gaps = row_max_gap(binary)
-    valid = gaps[gaps > 0]
+def mean_gap(binary):
+    bridges = row_min_bridge(binary)
+    valid = bridges[~np.isnan(bridges)]
 
     if len(valid) == 0:
-        return 0
+        return 0.0
 
-    return valid.min()
+    return valid.mean()
 
 
 def gap_profile_error(pred, target):
-    gp = row_max_gap(pred)
-    gt = row_max_gap(target)
+    gp = row_min_bridge(pred)
+    gt = row_min_bridge(target)
 
-    valid = (gt > 0)
+    valid = (~np.isnan(gp)) & (~np.isnan(gt))
 
     if valid.sum() == 0:
         return 0.0
@@ -76,19 +121,20 @@ def evaluate_pair(pred_path, gt_path):
     pred = load_binary(pred_path)
     gt = load_binary(gt_path)
 
-    px_diff = pixel_difference(pred, gt)
+    mse_diff = mse_difference(pred, gt)
 
-    pred_gap = min_gap(pred)
-    gt_gap = min_gap(gt)
+    pred_gap = mean_gap(pred)
+    gt_gap = mean_gap(gt)
     gap_err = abs(pred_gap - gt_gap)
 
     profile_err = gap_profile_error(pred, gt)
 
     return {
-        "pixel_diff": px_diff,
+        "mse_diff": mse_diff,
         "gap_err": gap_err,
         "profile_err": profile_err,
     }
+
 
 def extract_epoch(folder_name):
     m = re.search(r"epoch_(\d+)", folder_name)
@@ -98,55 +144,95 @@ def extract_epoch(folder_name):
 
 
 def main():
+    print(exp_name)
     infer_dirs = sorted(
-        [p for p in exp_dir.iterdir() if p.is_dir() and "infer_checkpoint" in p.name],
-        key=lambda x: extract_epoch(x.name),
+    [
+        p
+        for p in exp_dir.iterdir()
+        if p.is_dir()
+        and "infer_checkpoint_epoch_" in p.name
+    ],
+    key=lambda x: extract_epoch(x.name),
+)
+
+    gt_cache = {}
+
+    gt_files = sorted(
+        gt_dir.glob("resist_bottom_*.png")
     )
 
+    for gt_path in gt_files:
+        idx = int(re.search(r"(\d+)", gt_path.stem).group(1))
+        gt_cache[idx] = load_binary(gt_path)
+    
     epochs = []
-    pixel_curve = []
+    mse_curve = []
     gap_curve = []
     profile_curve = []
 
     for infer_dir in infer_dirs:
-        pixel_list = []
+        mse_list = []
         gap_list = []
         profile_list = []
 
-        for i in range(10):
-            gt_path = gt_dir / f"resist_bottom_{i:05d}.png"
-            pred_path = infer_dir / f"test_pattern_{i:05d}.png"
-
-            if not gt_path.exists():
-                print(f"[WARN] missing gt: {gt_path}")
-                continue
+        for i, gt in gt_cache.items():
+            pred_path = (
+                infer_dir
+                / f"test_pattern_{i:05d}.png"
+            )
+            # pred_path = infer_dir / f"resist_bottom_{i:05d}.png"
 
             if not pred_path.exists():
                 print(f"[WARN] missing pred: {pred_path}")
                 continue
 
-            result = evaluate_pair(pred_path, gt_path)
+            pred = load_binary(pred_path)
 
-            pixel_list.append(result["pixel_diff"])
-            gap_list.append(result["gap_err"])
-            profile_list.append(result["profile_err"])
+            mse_diff = mse_difference(pred, gt)
 
-        if len(pixel_list) == 0:
+            pred_gap = mean_gap(pred)
+            gt_gap = mean_gap(gt)
+            gap_err = abs(pred_gap - gt_gap)
+
+            profile_err = gap_profile_error(pred, gt)
+
+            mse_list.append(mse_diff)
+            gap_list.append(gap_err)
+            profile_list.append(profile_err)
+
+        if len(mse_list) == 0:
             continue
 
-        epoch = extract_epoch(infer_dir.name)
+        epoch = extract_epoch(
+            infer_dir.name
+        )
 
         epochs.append(epoch)
-        pixel_curve.append(np.mean(pixel_list))
+        mse_curve.append(np.mean(mse_list))
         gap_curve.append(np.mean(gap_list))
         profile_curve.append(np.mean(profile_list))
 
         print(
             f"[Epoch {epoch}] "
-            f"pixel={pixel_curve[-1]:.4f}, "
+            f"mse={mse_curve[-1]:.4f}, "
             f"gap={gap_curve[-1]:.4f}, "
             f"profile={profile_curve[-1]:.4f}"
         )
+        
+    # ==================================================
+    # 保存 CSV
+    # ==================================================
+    df = pd.DataFrame({
+        "epoch": epochs,
+        "mse": mse_curve,
+        "gap_error": gap_curve,
+        "profile_error": profile_curve,
+    })
+
+    csv_path = exp_dir / f"{exp_name}_evaluation.csv"
+    df.to_csv(csv_path, index=False)
+
+    print(f"Saved csv to: {csv_path}")
 
     # ==================================================
     # 绘图
@@ -154,25 +240,29 @@ def main():
     fig, ax1 = plt.subplots(figsize=(9, 5))
 
     # 左轴：gap 和 profile
-    ax1.plot(epochs, gap_curve, marker="o", label="Min Gap Error")
+    ax1.plot(epochs, gap_curve, marker="o", label="Mean Gap Error")
     ax1.plot(epochs, profile_curve, marker="o", label="Gap Profile Error")
 
     ax1.set_xlabel("Epoch")
     ax1.set_ylabel("Gap / Profile Error")
     ax1.grid(True)
+    ax1.set_ylim(0, 80)
 
-    # 右轴：pixel
+    # 右轴：MSE
     ax2 = ax1.twinx()
+
     ax2.plot(
         epochs,
-        pixel_curve,
-        marker="o",
+        mse_curve,
+        marker="s",
         linestyle="--",
-        color="red",
-        label="Pixel Difference",
+        color="green",
+        label="MSE",
     )
-    ax2.set_ylabel("Pixel Difference", color="red")
-    ax2.tick_params(axis="y", labelcolor="red")
+
+    ax2.set_ylabel("MSE")
+    ax2.tick_params(axis="y", labelcolor="green")
+    ax2.set_ylim(0, 0.2)
 
     # 合并图例
     lines1, labels1 = ax1.get_legend_handles_labels()
@@ -180,9 +270,9 @@ def main():
 
     ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
 
-    plt.title("Prediction Quality vs Training Epoch")
-
-    save_path = exp_dir / "evaluation_trend.png"
+    plt.title(f"{exp_name}_Quality vs Epoch")
+    
+    save_path = exp_dir / f"{exp_name}_evaluation.png"
     plt.savefig(save_path, dpi=200)
     plt.close()
 

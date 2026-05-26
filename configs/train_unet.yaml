@@ -24,7 +24,7 @@ pattern_types:
   - mental_circle
 
 output_root: /content/drive/MyDrive/Colab Notebooks/experiments
-output_dir: exp_unet_smooth_bce_dice_0.5mse
+output_dir: exp_unet_smooth_bce_dice_0.5mse_final
 device: auto
 num_workers: 0
 seed: 42
